@@ -52,9 +52,17 @@ static uint16_t gifWidth, gifHeight;
 static int lastCoordinate; // last coordinate (x+y) that was set, used to reduce redundant pixel writes
 static uint16_t perPixelX, perPixelY; // scaling factors when upscaling
 
-void screenClearCallback(void) {
-  activeSeg->fill(0);
+// void screenClearCallback(void) {
+//   activeSeg->fill(0);
+// }
+void screenClearCallback(void) { //this mod will fill the background with the secondary color from the wled UI instead of black.
+  if (activeSeg) {
+    // Vul de achtergrond met Kleur 2 (Secundaire kleur) uit de WLED UI
+    uint32_t bgColor = activeSeg->colors[1]; 
+    activeSeg->fill(bgColor);
+  }
 }
+
 
 // this callback runs when the decoder has finished painting all pixels
 void updateScreenCallback(void) {
@@ -85,17 +93,41 @@ void drawPixelCallback1D(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8
   }
 }
 
+// void drawPixelCallback2D(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
+//   // simple nearest-neighbor scaling
+//   int outY = (int)y * activeSeg->vHeight() / gifHeight;
+//   int outX = (int)x * activeSeg->vWidth()  / gifWidth;
+//   // Pack coordinates uniquely: outY into upper 16 bits, outX into lower 16 bits
+//   if (((outY << 16) | outX) == lastCoordinate) return; // skip setting same coordinate again
+//   lastCoordinate = (outY << 16) | outX; // since input is a "scanline" this is sufficient to identify a "unique" coordinate
+//   // set multiple pixels if upscaling
+//   for (int i = 0; i < perPixelX; i++) {
+//     for (int j = 0; j < perPixelY; j++) {
+//       activeSeg->setPixelColorXY(outX + i, outY + j, red, green, blue);
+//     }
+//   }
+// }
+
 void drawPixelCallback2D(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
-  // simple nearest-neighbor scaling
-  int outY = (int)y * activeSeg->vHeight() / gifHeight;
-  int outX = (int)x * activeSeg->vWidth()  / gifWidth;
-  // Pack coordinates uniquely: outY into upper 16 bits, outX into lower 16 bits
-  if (((outY << 16) | outX) == lastCoordinate) return; // skip setting same coordinate again
-  lastCoordinate = (outY << 16) | outX; // since input is a "scanline" this is sufficient to identify a "unique" coordinate
-  // set multiple pixels if upscaling
-  for (int i = 0; i < perPixelX; i++) {
-    for (int j = 0; j < perPixelY; j++) {
-      activeSeg->setPixelColorXY(outX + i, outY + j, red, green, blue);
+  if (!activeSeg) return;
+
+// if transparant gifs are used, the background can be chosen from the color picker.
+  int16_t matrixWidth  = activeSeg->vWidth();   // 64
+  int16_t matrixHeight = activeSeg->vHeight();  // 16
+
+  if (gifWidth <= 0) return;
+
+  uint32_t progress = (millis() * (activeSeg->speed + 1)) >> 6;
+
+  for (int16_t screenX = 0; screenX < matrixWidth; screenX++) {
+    int16_t gifX = (screenX + progress) % gifWidth;
+
+    if (gifX == x && y < matrixHeight) {
+      uint32_t col = RGBW32(red, green, blue, 0);
+      
+      // Teken de GIF-pixel (de achtergrond die we in screenClearCallback hebben
+      // ingesteld blijft staan op de plek waar geen GIF-pixels zijn)
+      activeSeg->setPixelColorXY(screenX, y, col);
     }
   }
 }
